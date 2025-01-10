@@ -1,5 +1,6 @@
 import gymnasium as gym
 import numpy as np
+from numba import jit
 
 
 class HIVPatient(gym.Env):
@@ -164,7 +165,7 @@ class HIVPatient(gym.Env):
 
         return self.state(), {}
 
-    
+    @jit(nopython=True)
     def der(self, state, action):
         T1 = state[0]
         T1star = state[1]
@@ -204,7 +205,7 @@ class HIVPatient(gym.Env):
         )
         return np.array([T1dot, T1stardot, T2dot, T2stardot, Vdot, Edot])
 
-    
+    @jit(nopython=True)
     def transition(self, state, action, duration):
         """duration should be a multiple of 1e-3"""
         state0 = np.copy(state)
