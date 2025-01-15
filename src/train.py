@@ -5,6 +5,9 @@ from stable_baselines3 import DQN
 import torch
 import os
 import numpy as np
+import torch
+import torch.nn as nn 
+import torch.optim as optim
 print(os.path.abspath("./dqn_hiv_logs/"))
 
 print(torch.cuda.is_available()) 
@@ -59,12 +62,12 @@ class DiscretizeObservationWrapper(gym.ObservationWrapper):
 
 
 log_bins = [
-    np.logspace(np.log10(1e-1), np.log10(1e6), 10),  # T1 (10 bins entre 0.1 et 1e6)
-    np.logspace(np.log10(1), np.log10(5e4), 8),      # T1* (8 bins entre 1 et 5e4)
-    np.logspace(np.log10(1), np.log10(3200), 6),     # T2 (6 bins entre 1 et 3200)
-    np.logspace(np.log10(1), np.log10(80), 5),       # T2* (5 bins entre 1 et 80)
-    np.logspace(np.log10(1), np.log10(2.5e5), 10),   # V (10 bins entre 1 et 2.5e5)
-    np.logspace(np.log10(1), np.log10(353200), 7),   # E (7 bins entre 1 et 353200)
+    np.logspace(np.log10(1e5), np.log10(3e6), 12),  # T1 (10 bins entre 0.1 et 1e6) 12
+    np.logspace(np.log10(1), np.log10(5e4), 10),      # T1* (8 bins entre 1 et 5e4) 10
+    np.logspace(np.log10(1), np.log10(3200), 8),     # T2 (6 bins entre 1 et 3200) 8
+    np.logspace(np.log10(1), np.log10(80), 7),       # T2* (5 bins entre 1 et 80) 7
+    np.logspace(np.log10(1), np.log10(2.5e3), 20),   # V (10 bins entre 1 et 2.5e5) 12
+    np.logspace(np.log10(1), np.log10(353200), 200),   # E (7 bins entre 1 et 353200) 9
 ]
 
 env = DiscretizeObservationWrapper(env=env, log_bins=log_bins)
@@ -80,8 +83,8 @@ class ProjectAgent:
         self.model = DQN(
             policy="MlpPolicy",
             env=env,
-            learning_rate=1e-3,         # Taux d'apprentissage
-            buffer_size=100000,         # Taille du buffer
+            learning_rate=5e-4,         # Taux d'apprentissage 1e-3
+            buffer_size=100000,         # Taille du buffer 100000
             learning_starts=1000,       # Pas avant le début de l'apprentissage
             batch_size=64,              # Taille des batchs pour l'entraînement
             gamma=0.99,                 # Facteur de discount
@@ -91,12 +94,16 @@ class ProjectAgent:
             policy_kwargs=policy_kwargs, # Architecture du réseau
             verbose=1,                  # Niveau de verbosité
             tensorboard_log="./dqn_hiv_logs",  # Log pour TensorBoard
-            exploration_final_eps=0.05
+            exploration_final_eps=0.05 #0.05
         )
 
     def act(self, observation, use_random=False):
         # Prédire une action avec le modèle
-        action, _ = self.model.predict(observation, deterministic=not use_random)
+        discretized = [
+            np.digitize(observation[i], log_bins[i]) for i in range(len(log_bins))
+        ]
+        obs = np.array(discretized)
+        action, _ = self.model.predict(obs, deterministic=not use_random)
         return action
 
     def save(self, path):
@@ -109,7 +116,67 @@ class ProjectAgent:
 
     def train(self):
         # Entraîner le modèle
-        self.model.learn(total_timesteps=100000)
+        self.model.learn(total_timesteps=3200000)
+
+class MLP(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim):
+        super(MLP, self).__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3 = nn.Linear(hidden_dim, output_dim)
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        x = self.relu(self.fc1(x))
+        x = self.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x
+    
+
+
+class CustomEnv(HIVPatient):
+    def __init__(self, observation):
+        super().__init__()
+        self.T1, self.T1star, self.T2, self.T2star, self.V, self.E = observation  
+
+
+def pref(x):
+    if x > 82:
+        if x > 284:
+            return (x - 284) / 933
+        else:
+            return (284 - x) /202
+    else:
+        return 2
+
+class ProjectAgent2:
+
+    def act(self, observation, use_random=False):
+        future_T1_T2 = []
+        d = []
+        for action in range(4):
+            env = CustomEnv(observation=observation)
+            obs, reward, done, truncated, info = env.step(action)
+            future_T1_T2.append(obs[1]+ obs[3])
+            d.append(pref(obs[1]+ obs[3]))
+        print(future_T1_T2)
+        if future_T1_T2[-1] > 1400:
+            return 0
+        for i in range(4):
+            if future_T1_T2[3 - i] > 82:
+                return 3 - i
+        return 0
+        
+
+
+    def save(self, path):
+        # Sauvegarder le modèle
+        pass
+
+    def load(self):
+        # Charger le modèle
+        pass
+
 
 
 if __name__ == "__main__":
