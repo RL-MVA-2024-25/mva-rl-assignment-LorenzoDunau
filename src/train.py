@@ -1,7 +1,6 @@
 from gymnasium.wrappers import TimeLimit
 import gymnasium as gym
 from env_hiv import HIVPatient
-from stable_baselines3 import DQN
 import torch
 import os
 import numpy as np
@@ -79,40 +78,17 @@ class ProjectAgent:
             net_arch=[128, 128, 128],  # [128, 128, 128]
         )
 
-        # Créer et entraîner le modèle DQN
-        self.model = DQN(
-            policy="MlpPolicy",
-            env=env,
-            learning_rate=5e-4,         # Taux d'apprentissage 1e-3
-            buffer_size=100000,         # Taille du buffer 100000
-            learning_starts=1000,       # Pas avant le début de l'apprentissage
-            batch_size=64,              # Taille des batchs pour l'entraînement
-            gamma=0.99,                 # Facteur de discount
-            target_update_interval=500, # Fréquence de mise à jour du réseau cible
-            train_freq=4,               # Fréquence d'entraînement
-            gradient_steps=1,           # Nombre de mises à jour par pas d'entraînement
-            policy_kwargs=policy_kwargs, # Architecture du réseau
-            verbose=1,                  # Niveau de verbosité
-            tensorboard_log="./dqn_hiv_logs",  # Log pour TensorBoard
-            exploration_final_eps=0.05 #0.05
-        )
+
 
     def act(self, observation, use_random=False):
         # Prédire une action avec le modèle
-        discretized = [
-            np.digitize(observation[i], log_bins[i]) for i in range(len(log_bins))
-        ]
-        obs = np.array(discretized)
-        action, _ = self.model.predict(obs, deterministic=not use_random)
-        return action
+        return 0
 
-    def save(self, path):
-        # Sauvegarder le modèle
-        self.model.save(path)
+
 
     def load(self):
         # Charger le modèle
-        self.model = DQN.load("dqn_hiv_patient.zip", env=env)
+        pass
 
     def train(self):
         # Entraîner le modèle
